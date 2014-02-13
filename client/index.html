@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+
+<html>
+	<head>
+		<meta charset="utf-8">
+		<title>Index</title>
+		<link rel="stylesheet" href="lib/codemirror/lib/codemirror.css">
+		<script src="lib/codemirror/lib/codemirror.js"></script>
+		<script src="lib/codemirror/mode/xml/xml.js"></script>
+		<script src="lib/codemirror/mode/javascript/javascript.js"></script>
+		<script src="lib/codemirror/mode/css/css.js"></script>
+		<script src="lib/codemirror/mode/htmlmixed/htmlmixed.js"></script>
+		<script src="lib/codemirror/mode/php/php.js"></script>
+		<script src="lib/codemirror/mode/clike/clike.js"></script>
+	</head>
+	<body>
+		<h1>Index</h1>
+		<textarea id="code"></textarea>
+		<script>
+			var myCodeMirror = CodeMirror.fromTextArea(document.getElementById("code"), {
+			mode:  "php",
+			lineNumbers: true,
+			indentWithTabs: true
+			});
+    		</script>
+	</body>
+</html>
