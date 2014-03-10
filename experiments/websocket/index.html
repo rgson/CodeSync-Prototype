@@ -1,0 +1,43 @@
+<!doctype html>
+<html>
+	<head>
+		<title>Websocket test</title>
+		<meta charset="utf-8">
+		<script type="text/javascript">			
+			function send() {
+				var txt = document.getElementById("msg").value;
+				conn.send(txt);
+			}
+		
+			function receive(msg) {
+				var div = document.createElement("div");
+				var txt = document.createTextNode(msg);
+				div.appendChild(txt);
+				var output = document.getElementById("output");
+				output.appendChild(div);
+			}
+		
+			if (window["WebSocket"]) {
+				console.log("Establishing WebSocket...");
+				conn = new WebSocket("ws://localhost:12345/");
+				console.log("WebSocket established!");
+				conn.onclose = function(evt) {
+					receive("Connection closed.");
+				}
+				conn.onmessage = function(evt) {
+					receive(evt.data);
+				}
+			} else {
+				receive("Your browser does not support WebSockets.");
+			}
+    	</script>
+	</head>
+	<body>
+		<div id="input">
+			<textarea id="msg">Write here...</textarea>
+			<button onclick="send()">Submit</button>
+		</form>
+		<div id="output">
+		</div>
+	</body>
+</html>
