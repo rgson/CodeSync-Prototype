@@ -1,10 +1,3 @@
-/*
-* Client application for text synchronization.
-* This code must not be copied or redistributed.
-*
-* Copyright (c) 2014 Robin Gustafsson
-*/
-
 // TODO Implement separate sending of messages, rather than after calculating diffs.
 
 (function () {
