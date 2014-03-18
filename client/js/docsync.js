@@ -278,7 +278,7 @@
 		shadowLocalVersion = 0;
 		shadowRemoteVersion = msg.v;
 		backup = msg.content;
-		backupLocalVersion = msg.v;
+		backupLocalVersion = 0;
 		edits = [];
 		hasDocument = true;
 	}	
