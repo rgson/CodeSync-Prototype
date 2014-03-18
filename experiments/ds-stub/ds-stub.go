@@ -42,15 +42,16 @@ type Edit struct {
 
 var doc Document = Document{Version: 0, RemoteVersion: 0, Content: "The document's content goes here"}
 
-func echoServer(ws *websocket.Conn) {
-	i := 0
+func docServer(ws *websocket.Conn) {
     for {
     	in := make([]byte, 512)
-    	n, _ := ws.Read(in)
-    	s := string(in[:n])
-    	fmt.Print(i)
-    	fmt.Println(": " + s)
-    	i++
+    	n, err := ws.Read(in)
+    	if err != nil {
+    		fmt.Println(err)
+    		break
+    	}
+    	
+    	fmt.Println(string(in[:n]))
     	
     	msg := &Message{}
     	json.Unmarshal(in[:n], &msg)
@@ -70,10 +71,9 @@ func echoServer(ws *websocket.Conn) {
     }
 }
 
-// This example demonstrates a trivial echo server.
 func exampleHandler() {
-    http.Handle("/", websocket.Handler(echoServer))
-    err := http.ListenAndServe(":12345", nil)
+    http.Handle("/", websocket.Handler(docServer))
+    err := http.ListenAndServe(":5555", nil)
     if err != nil {
         panic("ListenAndServe: " + err.Error())
     }
@@ -82,5 +82,4 @@ func exampleHandler() {
 func main() {
 	fmt.Println("Starting...")
 	exampleHandler()
-	fmt.Println("Done with ExampleHandler")
 }
