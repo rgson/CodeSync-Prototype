@@ -12,7 +12,7 @@
 	var EDITOR = editor;					// The CodeMirror editor.
 	var HOST = "ws://localhost:12345/";		// The endpoint containing the document server.
 	var EDITS_INTERVAL = 1000;				// Time between edit calculations.
-	var SEND_INTERVAL = 5000;				// Time between sending edits.
+	var SEND_INTERVAL = 1000;				// Time between sending edits.
 	var TIMEOUT_INTERVAL = 5000;			// Time before timeouts.
 	var MAX_ATTEMPTS = 3;					// Maximum number of attempts to get the document from the server.
 	
