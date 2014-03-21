@@ -205,54 +205,59 @@
 			// Edits are based on an old version. Use the backup shadow.
 			shadow = backup;
 			shadowLocalVersion = backupLocalVersion;
+			
+		} else if (msg.v < shadowLocalVersion && msg.v !== backupLocalVersion) {
+			// Edits are based on an old version, but somehow the backup is out of sync. Reinitialize and accept loss.
+			initialize();
+			return;
       
 		} else if (msg.v > shadowLocalVersion) {
 			// Somehow, the server received a version we never had. Reinitialize and accept loss.
 			initialize();
 			return;
       
-		} else {
-			// Versions match - apply patch.
-			for (var i = 0; i < msg.edits.length; i++) {
-				var edit = msg.edits[i];
-								
-				if (edit.v <= shadowLocalVersion) {
-					// Already handled
-					continue;
-          
-				} else if (edit.v > shadowLocalVersion + 1) {
-					// Somehow we've skipped one version. Reinitialize and accept loss.
-					initialize();
-					return;
-          
-				} else {
-					// Versions match - apply patch.
-					var patch = dmp.patch_fromText(edit.patch);
-					
-					// Apply to shadow (strict).
-					var newShadow = dmp.patch_apply(patch, shadow)[0];
-					var newShadowRemoteVersion = edit.v;
-					
-					if (md5(newShadow) !== edit.md5) {
-						// Strict patch unsuccessful. Reinitialize and accept loss.
-						initialize();
-						return;
-					}
-					
-					// Strict patch successful.
-					shadow = newShadow;
-					shadowRemoteVersion = newShadowRemoteVersion;
-					
-					// Copy shadow to backup
-					backup = shadow;
-					backupLocalVersion = shadowLocalVersion;
-					
-					// Apply to text (fuzzy).
-					setText( dmp.patch_apply(patch, getText())[0] );
-          
-          sendAck();
-				}
+		}
+		
+		// Versions match - apply patch.
+		for (var i = 0; i < msg.edits.length; i++) {
+			var edit = msg.edits[i];
+							
+			if (edit.v <= shadowRemoteVersion) {
+				// Already handled
+				continue;
+      
+			} else if (edit.v > shadowRemoteVersion + 1) {
+				// Somehow we've skipped one version. Reinitialize and accept loss.
+				initialize();
+				return;
+      
 			}
+			
+			// Versions match - apply patch.
+			var patch = dmp.patch_fromText(edit.patch);
+			
+			// Apply to shadow (strict).
+			var newShadow = dmp.patch_apply(patch, shadow)[0];
+			var newShadowRemoteVersion = edit.v;
+			
+			if (md5(newShadow) !== edit.md5) {
+				// Strict patch unsuccessful. Reinitialize and accept loss.
+				initialize();
+				return;
+			}
+			
+			// Strict patch successful.
+			shadow = newShadow;
+			shadowRemoteVersion = newShadowRemoteVersion;
+			
+			// Copy shadow to backup
+			backup = shadow;
+			backupLocalVersion = shadowLocalVersion;
+			
+			// Apply to text (fuzzy).
+			setText( dmp.patch_apply(patch, getText())[0] );
+  
+  			sendAck();
 		}
 	}
 	
@@ -260,7 +265,7 @@
 	* Handles a received "ack" message.
 	*/
 	function handleAckMessage(msg) {
-		// Remove confirmed edits from the stack
+		// Remove confirmed edits from the queue.
 		for(var i = 0; i < edits.length; i++) {
 			if(edits[i].v <= msg.v)
 				edits.shift();
@@ -276,7 +281,7 @@
 		setText(msg.content);
 		shadow = msg.content;
 		shadowLocalVersion = 0;
-		shadowRemoteVersion = msg.v;
+		shadowRemoteVersion = 0;
 		backup = msg.content;
 		backupLocalVersion = 0;
 		edits = [];
