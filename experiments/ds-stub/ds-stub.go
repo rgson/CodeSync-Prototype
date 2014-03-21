@@ -1,16 +1,16 @@
 package main
 
 import (
+	"code.google.com/p/go.net/websocket"
+	"encoding/json"
 	"fmt"
 	"net/http"
-	"encoding/json"
-	"code.google.com/p/go.net/websocket"
 )
 
 type Document struct {
-	Version int
+	Version       int
 	RemoteVersion int
-	Content string
+	Content       string
 }
 
 type Message struct {
@@ -19,25 +19,25 @@ type Message struct {
 
 type DocumentMessage struct {
 	DocType string `json:"type"`
-	Version int `json:"v"`
+	Version int    `json:"v"`
 	Content string `json:"content"`
 }
 
 type AckMessage struct {
 	DocType string `json:"type"`
-	Version int `json:"v"`
+	Version int    `json:"v"`
 }
 
 type EditMessage struct {
 	DocType string `json:"type"`
-	Version int `json:"v"`
-	Edits []Edit `json:"edits"`
+	Version int    `json:"v"`
+	Edits   []Edit `json:"edits"`
 }
 
 type Edit struct {
-	Version int `json:"v"`
-	Patch string `json:"patch"`
-	MD5 string `json:"md5"`
+	Version int    `json:"v"`
+	Patch   string `json:"patch"`
+	MD5     string `json:"md5"`
 }
 
 var doc Document = Document{Version: 0, RemoteVersion: 0, Content: "The document's content goes here"}
@@ -50,9 +50,9 @@ func docServer(ws *websocket.Conn) {
 			fmt.Println(err)
 			break
 		}
-		
+
 		fmt.Println(string(in[:n]))
-		
+
 		msg := &Message{}
 		json.Unmarshal(in[:n], &msg)
 		switch msg.DocType {

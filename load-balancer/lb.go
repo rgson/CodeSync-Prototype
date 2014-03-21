@@ -12,7 +12,7 @@ const (
 	CONN_HOST = "localhost" // Lokal adress. Anpassas efter nätverket.
 	CONN_PORT = "3333"
 	CONN_TYPE = "tcp"
-	DNS_TIMER = 300
+	DNS_TIMER = 300 * time.Second
 )
 
 var documentServer = make(map[string]int64)
@@ -65,8 +65,6 @@ func handleRequest(conn net.Conn) {
 		str := conn.RemoteAddr().String()
 		documentServer[str] = buf2
 
-		// Send the request to a new reciever.
-
 	}
 
 }
@@ -88,7 +86,7 @@ func selectServer() {
 		if min != "" {
 			changeDNS(min)
 		}
-		time.Sleep(DNS_TIMER * time.Second)
+		time.Sleep(DNS_TIMER)
 	}
 }
 

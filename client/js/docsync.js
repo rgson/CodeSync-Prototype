@@ -1,4 +1,5 @@
 // TODO Implement separate sending of messages, rather than after calculating diffs.
+// TODO Improve cursor positioning
 
 (function () {
 	
@@ -11,8 +12,8 @@
 	// Set config values.
 	var EDITOR = editor;					// The CodeMirror editor.
 	var HOST = "ws://localhost:12345/";		// The endpoint containing the document server.
-	var EDITS_INTERVAL = 1000;				// Time between edit calculations.
-	var SEND_INTERVAL = 1000;				// Time between sending edits.
+	var EDITS_INTERVAL = 500;				// Time between edit calculations.
+	var SEND_INTERVAL = 500;				// Time between sending edits.
 	var TIMEOUT_INTERVAL = 5000;			// Time before timeouts.
 	var MAX_ATTEMPTS = 3;					// Maximum number of attempts to get the document from the server.
 	
@@ -144,7 +145,9 @@
 	* Sets the client's main text.
 	*/
 	function setText(text) {
+		var cursor = EDITOR.getCursor("head");
 		EDITOR.setValue(text);
+		EDITOR.setCursor(cursor)
 	}
 	
 	/*
@@ -272,6 +275,9 @@
 			else
 				break;
 		}
+		// Take backup.
+		backup = shadow;
+		backupLocalVersion = shadowLocalVersion;
 	}
 	
 	/*
@@ -296,29 +302,29 @@
 		if (!hasDocument)
 			return;
 
-    var text = getText();
+		var text = getText();
 	
 		// Caluclate diffs.
-		var diffs = dmp.diff_main(shadow, text);
-		
-		if(diffs.length === 1) {
-			// No differences
-			return;
-		}
-				
+		var diffs = dmp.diff_main(shadow, text);				
 		dmp.diff_cleanupEfficiency(diffs);
 		
 		// Calculate patch.
-		var patches = dmp.patch_make(shadow, diffs);					
+		var patches = dmp.patch_make(shadow, diffs);
+		
+		if (patches.length < 1) {
+			// No differences.
+			return
+		}
+							
 		var patches_text = dmp.patch_toText(patches);
-				
-		// Add edit to edit queue.
-		var edit = new Edit(shadowLocalVersion, patches_text, md5(shadow));
-		edits.push(edit);
 		
 		// Increment shadow.
 		shadow = text;
 		shadowLocalVersion++;
+				
+		// Add edit to edit queue.
+		var edit = new Edit(shadowLocalVersion, patches_text, md5(shadow));
+		edits.push(edit);
 		
 		// Send edits.
 		// TODO Implement separate sending of messages, rather than after calculating diffs.

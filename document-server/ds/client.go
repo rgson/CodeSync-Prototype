@@ -3,28 +3,57 @@ package ds
 import (
 	"code.google.com/p/go.net/websocket"
 	"fmt"
+	"time"
+)
+
+const (
+	EDITS_INTERVAL = 500
+	SEND_INTERVAL  = 500
 )
 
 type Client struct {
-	Connection *websocket.Conn
-	Document *Document
+	ID          int
+	Connection  *websocket.Conn
+	Document    *Document
+	Initialized bool
 }
 
 func (c *Client) Handle() {
-	
-	// TODO Use ticker here to time the edits/sends
-	//go calculateEdit()		// Run a timed goroutine to calculate edits
-	//go sendEdits()			// Run a timed goroutine to send available edits
-	
+	defer c.Connection.Close()
+
+	// Run a timed goroutine to calculate edits.
+	editTicker := time.NewTicker(EDITS_INTERVAL * time.Millisecond)
+	go func() {
+		for _ = range editTicker.C {
+			if c.Initialized {
+				c.Document.CalculateEdit()
+			}
+		}
+	}()
+	defer editTicker.Stop()
+
+	// Run a timed goroutine to send available edits.
+	sendTicker := time.NewTicker(SEND_INTERVAL * time.Millisecond)
+	go func() {
+		for _ = range sendTicker.C {
+			if c.Initialized {
+				if c.Document.HasEdits() {
+					c.sendEdits()
+				}
+			}
+		}
+	}()
+	defer sendTicker.Stop()
+
+	// Listen for messages.
 	for {
 		buffer := make([]byte, 1024)
 		length, err := c.Connection.Read(buffer)
-		
+
 		if err != nil {
-			fmt.Println("Error listening:", err.Error)
-			break; // Stops listening to this client!
+			break
 		}
-		
+
 		msg, msgtype := ParseMessage(buffer[:length])
 		c.handleMessage(msg, msgtype)
 	}
@@ -33,27 +62,29 @@ func (c *Client) Handle() {
 
 func (c *Client) initialize() {
 
+	c.Initialized = false
 	c.Document = &Document{}
 	c.Document.Initialize()
 	c.sendDocument()
+	c.Initialized = true
 
 }
 
 func (c *Client) handleMessage(msg interface{}, msgtype string) {
 
 	switch msgtype {
-	
+
 	case MSGTYPE_EDIT:
 		c.handleEditMessage(msg.(EditMessage))
-		
+
 	case MSGTYPE_ACK:
 		c.handleAckMessage(msg.(AckMessage))
-		
+
 	case MSGTYPE_REQUEST:
 		c.handleRequestMessage(msg.(RequestMessage))
-		
+
 	}
-	
+
 }
 
 func (c *Client) handleEditMessage(msg EditMessage) {
@@ -61,6 +92,7 @@ func (c *Client) handleEditMessage(msg EditMessage) {
 	err := c.Document.ApplyEdits(msg.Version, msg.Edits)
 	if err != nil {
 		// Patch unsuccessful - reinitialize and accept loss.
+		fmt.Printf("Client %d: %s\n", c.ID, err.Error())
 		c.initialize()
 	} else {
 		// Patch successful - send ack.

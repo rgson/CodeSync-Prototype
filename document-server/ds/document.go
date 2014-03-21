@@ -1,10 +1,15 @@
 package ds
 
 import (
-	"fmt"
-	"ds/queue"
 	"ds/checksum"
+	"ds/queue"
+	"fmt"
 	"github.com/sergi/go-diff/diffmatchpatch"
+	"io/ioutil"
+)
+
+const (
+	DOCUMENT_PATH = "text.txt"
 )
 
 var dmp = diffmatchpatch.New()
@@ -12,35 +17,38 @@ var dmp = diffmatchpatch.New()
 type Document struct {
 	Shadow *Shadow
 	Backup *Backup
-	Edits queue.FIFO
+	Edits  queue.FIFO
 }
 
 type Shadow struct {
-	Content string
-	LocalVersion int
+	Content       string
+	LocalVersion  int
 	RemoteVersion int
 }
 
 type Backup struct {
-	Content string
+	Content      string
 	LocalVersion int
 }
 
 func (d *Document) Initialize() {
-	
+
 	text := d.GetText()
 	d.Shadow = &Shadow{Content: text, LocalVersion: 0, RemoteVersion: 0}
 	d.Backup = &Backup{Content: text, LocalVersion: 0}
-	
+
 }
 
 func (d *Document) GetText() string {
-	// TODO Read text from document file
-	return ""
+	inbyte, err := ioutil.ReadFile(DOCUMENT_PATH)
+	if err != nil {
+		return ""
+	}
+	return string(inbyte[:])
 }
 
-func (d *Document) SetText(content string) {
-	// TODO Write text to document file
+func (d *Document) SetText(content string) error {
+	return ioutil.WriteFile(DOCUMENT_PATH, []byte(content), 0777)
 }
 
 func (d *Document) RestoreBackup() {
@@ -59,7 +67,7 @@ func (d *Document) TakeBackup() {
 
 func (d *Document) HasEdits() bool {
 
-	return d.Edits.Peek != nil
+	return !d.Edits.IsEmpty()
 
 }
 
@@ -74,68 +82,86 @@ func (d *Document) GetEdits() (version int, edits []Edit) {
 
 }
 
-
 func (d *Document) CalculateEdit() {
 
-	
+	text := d.GetText()
+
+	// Calculate differences.
+	diffs := dmp.DiffMain(d.Shadow.Content, text, false)
+	diffs = dmp.DiffCleanupEfficiency(diffs)
+
+	// Calculate patch.
+	patches := dmp.PatchMake(d.Shadow.Content, diffs)
+	if len(patches) < 1 {
+		// No differences.
+		return
+	}
+	patchesText := dmp.PatchToText(patches)
+
+	// Increment shadow.
+	d.Shadow.Content = text
+	d.Shadow.LocalVersion++
+
+	// Add edit to edit queue.
+	edit := Edit{Version: d.Shadow.LocalVersion, Patch: patchesText, MD5: checksum.MD5(d.Shadow.Content)}
+	d.Edits.Enqueue(edit)
 
 }
 
-
-func (d *Document) ApplyEdits(version int, edits []Edit) (error) {
+func (d *Document) ApplyEdits(version int, edits []Edit) error {
 
 	if version < d.Shadow.LocalVersion && version == d.Backup.LocalVersion {
 		// Edits are based on an old version. Use the backup shadow.
 		d.RestoreBackup()
-		
+
 	} else if version < d.Shadow.LocalVersion && version != d.Backup.LocalVersion {
 		// Edits are based on an old version, but somehow the backup is out of sync. Reinitialize and accept loss.
-		return fmt.Errorf("patch failed: version mismatch (backup out of sync)")
-		
+		return fmt.Errorf("patch failed: version mismatch (backup out of sync: client remote %d, backup local %d)", version, d.Backup.LocalVersion)
+
 	} else if version > d.Shadow.LocalVersion {
 		// Somehow, the client received a version we never had. Reinitialize and accept loss.
-		return fmt.Errorf("patch failed: version mismatch (client ahead of source)")
-		
+		return fmt.Errorf("patch failed: version mismatch (client ahead of source: client remote %d, server local %d)", version, d.Shadow.LocalVersion)
+
 	}
-		
+
 	// Versions match - apply patch
 	for _, edit := range edits {
-	
+
 		if edit.Version <= d.Shadow.RemoteVersion {
 			// Already handled
 			continue
-			
-		} else if edit.Version > d.Shadow.RemoteVersion + 1 {
+
+		} else if edit.Version > d.Shadow.RemoteVersion+1 {
 			// Somehow we've skipped one version. Reinitialize and accept loss.
 			return fmt.Errorf("patch failed: version mismatch (missing version)")
-			
+
 		}
-		
+
 		// Versions match - apply patch
 		patch, _ := dmp.PatchFromText(edit.Patch)
-		
+
 		// Apply to shadow (strict)
-		newShadow := &Shadow{}
+		newShadow := *d.Shadow
 		newShadow.Content, _ = dmp.PatchApply(patch, d.Shadow.Content)
 		newShadow.RemoteVersion = edit.Version
-		
+
 		if checksum.MD5(newShadow.Content) != edit.MD5 {
 			// Strict patch unsuccessful. Reinitialize and accept loss.
 			return fmt.Errorf("patch failed: strict patch unsuccessful")
 		}
-		
+
 		// Strict patch successful.
-		d.Shadow = newShadow
-		
+		d.Shadow = &newShadow
+
 		// Copy shadow to backup.
 		d.TakeBackup()
-		
+
 		// Apply to text (fuzzy).
 		newText, _ := dmp.PatchApply(patch, d.GetText())
 		d.SetText(newText)
-			
+
 	}
-	
+
 	return nil
 
 }
@@ -144,12 +170,17 @@ func (d *Document) RemoveConfirmedEdits(version int) {
 
 	//Remove confirmed edits from the queue.
 	for {
-		edit := d.Edits.Peek().(Edit)
-		if edit.Version <= version {
-			d.Edits.Dequeue()
-		} else {
+		edit := d.Edits.Peek()
+		if edit == nil {
 			break
 		}
+		if edit.(Edit).Version > version {
+			break
+		}
+		d.Edits.Dequeue()
 	}
+
+	// Take backup
+	d.TakeBackup()
 
 }
