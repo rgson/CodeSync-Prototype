@@ -9,16 +9,16 @@ import (
 )
 
 const (
-	CONN_HOST = "localhost" 		// Listening network.
-	CONN_PORT = "3434"				// Listening port.
-	DS_TIMEOUT = 10 * time.Second	// Timeout period for a document server's heartbeat signal.
-	DNS_TIMER = 300 * time.Second	// Interval för DNS updates.
+	CONN_HOST  = "localhost"       // Listening network.
+	CONN_PORT  = "3434"            // Listening port.
+	DS_TIMEOUT = 10 * time.Second  // Timeout period for a document server's heartbeat signal.
+	DNS_TIMER  = 300 * time.Second // Interval för DNS updates.
 )
 
 var documentServer = make(map[string]int64)
 
 func main() {
-	
+
 	// Listen for incoming connections.
 	l, err := net.Listen("tcp", CONN_HOST+":"+CONN_PORT)
 	if err != nil {
@@ -26,7 +26,7 @@ func main() {
 		os.Exit(1)
 	}
 	defer l.Close()
-	
+
 	// Run a timed goroutine to select the best server.
 	dnsTicker := time.NewTicker(DNS_TIMER)
 	go func() {
@@ -35,7 +35,7 @@ func main() {
 		}
 	}()
 	defer dnsTicker.Stop()
-	
+
 	// Actively listen for connections.
 	fmt.Println("Listening on " + CONN_HOST + ":" + CONN_PORT)
 	for {
@@ -46,7 +46,7 @@ func main() {
 			fmt.Println("Error accepting: ", err.Error())
 			os.Exit(1)
 		}
-		
+
 		// Handle connections in a new goroutine.
 		go handleRequest(conn)
 	}
@@ -55,11 +55,11 @@ func main() {
 // Handles incoming requests.
 func handleRequest(conn net.Conn) {
 	defer conn.Close()
-	
+
 	remoteAddr := conn.RemoteAddr().String()
-		
+
 	fmt.Println("Got connection:", remoteAddr)
-	
+
 	for {
 		// Make a buffer to hold incoming data.
 		buf := make([]byte, 4)
@@ -74,11 +74,11 @@ func handleRequest(conn net.Conn) {
 			printServers()
 			break
 		}
-		
+
 		clients, _ := binary.Varint(buf)
 		documentServer[remoteAddr] = clients
 		fmt.Printf("Heartbeat:\t%s\t%d\n", remoteAddr, clients)
-		
+
 		printServers()
 	}
 }
@@ -97,7 +97,7 @@ func selectServer() {
 			min = ip
 		}
 	}
-	
+
 	// Make sure a server was found (i.e. at least one server exists).
 	if min != "" {
 		// Change the active server.
