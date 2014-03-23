@@ -11,11 +11,12 @@
 	
 	// Set config values.
 	var EDITOR = editor;					// The CodeMirror editor.
-	var HOST = "ws://localhost:12345/";		// The endpoint containing the document server.
+	var HOST = "ws://localhost:4343/";		// The endpoint containing the document server.
 	var EDITS_INTERVAL = 500;				// Time between edit calculations.
 	var SEND_INTERVAL = 500;				// Time between sending edits.
-	var TIMEOUT_INTERVAL = 5000;			// Time before timeouts.
-	var MAX_ATTEMPTS = 3;					// Maximum number of attempts to get the document from the server.
+	var MSG_TIMEOUT_INTERVAL = 5000;		// Time before message timeouts.
+	var MAX_CONN_ATTEMPTS = 3;				// Maximum number of attempts to reconnect to a document server.
+	
 	
 	var MSGTYPE_EDIT = "edit";				// The type-attribute denoting an edit message.
 	var MSGTYPE_ACK = "ack";				// The type-attribute denoting an acknowledgement message.
@@ -25,7 +26,7 @@
 	var dmp = new diff_match_patch();		// The object used for calculating and applying patches.
 	
 	var conn;								// The WebSocket connection to the server.
-	var connAttempts = 0;					// The number of failed attempts to connect to servers.
+	var connAttempts = 0					// The number of failed connection attempts.
 	var hasDocument = false;				// Helps determine if the client has gotten its requested document.
 	var editsIntervalId;					// The ID of the interval used for calculating edits since last version.
 	var sendIntervalId;						// The ID of the interval used for sending edits to the server.
@@ -61,7 +62,17 @@
 		};
 		conn.onclose = function() {
 			clearInterval(editsIntervalId);
-			output("Connection to the synchronization server closed!");
+			
+			if (connAttempts < MAX_CONN_ATTEMPTS) {
+				if (connAttempts === 0) {
+					output("The connection dropped unexpectedly. Trying to reconnect...");
+				}
+				connAttempts++;
+				establishConnection();
+			} else {
+				output("Looks like the service is down. Sorry!");
+				throw { name: 'FatalError', message: 'Failed to connect after ' + MAX_CONN_ATTEMPTS + ' attempts.' };
+			}
 		};
 		conn.onmessage = function(evt) {
 			receive(evt.data);
@@ -96,6 +107,7 @@
 		backupLocalVersion = -1;
 		edits = [];
 		hasDocument = false;
+		connAttempts = 0;
 	}
 	
 	/*
@@ -168,15 +180,10 @@
 		setTimeout(
 			function () {
 				if(!hasDocument) {
-					if(++connAttempts < MAX_ATTEMPTS) {
-						resetConnection();
-					} else {
-						output("We couldn't get the document from the service after several retries, which means that the service is most likely down. Sorry!");
-						throw { name: 'FatalError', message: 'Failed to connect after ' + MAX_ATTEMPTS + ' attempts.' };
-					}
+					resetConnection();
 				}
 			},
-			TIMEOUT_INTERVAL
+			MSG_TIMEOUT_INTERVAL
 		);
 	}
 
