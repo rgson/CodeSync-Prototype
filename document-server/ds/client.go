@@ -7,8 +7,8 @@ import (
 )
 
 const (
-	EDITS_INTERVAL = 500 * time.Millisecond
-	SEND_INTERVAL  = 500 * time.Millisecond
+	EDITS_INTERVAL = 500
+	SEND_INTERVAL  = 500
 )
 
 type Client struct {
@@ -22,7 +22,7 @@ func (c *Client) Handle() {
 	defer c.Connection.Close()
 
 	// Run a timed goroutine to calculate edits.
-	editTicker := time.NewTicker(EDITS_INTERVAL)
+	editTicker := time.NewTicker(EDITS_INTERVAL * time.Millisecond)
 	go func() {
 		for _ = range editTicker.C {
 			if c.Initialized {
@@ -33,7 +33,7 @@ func (c *Client) Handle() {
 	defer editTicker.Stop()
 
 	// Run a timed goroutine to send available edits.
-	sendTicker := time.NewTicker(SEND_INTERVAL)
+	sendTicker := time.NewTicker(SEND_INTERVAL * time.Millisecond)
 	go func() {
 		for _ = range sendTicker.C {
 			if c.Initialized {
