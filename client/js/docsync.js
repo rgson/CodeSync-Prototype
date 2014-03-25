@@ -250,7 +250,7 @@
 			var newShadow = dmp.patch_apply(patch, shadow)[0];
 			var newShadowRemoteVersion = edit.v;
 			
-			if (md5(newShadow) !== edit.md5) {
+			if (MD5(newShadow) !== edit.md5) {
 				// Strict patch unsuccessful. Reinitialize and accept loss.
 				initialize();
 				return;
@@ -330,12 +330,19 @@
 		shadowLocalVersion++;
 				
 		// Add edit to edit queue.
-		var edit = new Edit(shadowLocalVersion, patches_text, md5(shadow));
+		var edit = new Edit(shadowLocalVersion, patches_text, MD5(shadow));
 		edits.push(edit);
 		
 		// Send edits.
 		// TODO Implement separate sending of messages, rather than after calculating diffs.
 		sendEdits();
+	}
+	
+	/*
+	* Calculates the MD5 hash of a string, in UTF-8.
+	*/
+	function MD5(str) {
+		return md5(unescape(encodeURIComponent(str)));
 	}
 	
 	// ---------------------------------------------------
