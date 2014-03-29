@@ -1,29 +1,85 @@
 package main
 
 import (
-	"encoding/binary"
 	"fmt"
 	"net"
 	"os"
 	"time"
+	"flag"
+	"encoding/json"
+	"codesync/lb"
+	"codesync/lb/bully"
 )
 
 const (
 	CONN_HOST  = "localhost"       // Listening network.
 	CONN_PORT  = "3434"            // Listening port.
 	DS_TIMEOUT = 10 * time.Second  // Timeout period for a document server's heartbeat signal.
+	LISTEN_TIMEOUT = 1 * time.Second // Timeout period for connection listening.
+	CONN_TIMEOUT = 10 * time.Second // Timout period for an established connection to send a message.
 	DNS_TIMER  = 300 * time.Second // Interval för DNS updates.
 )
 
-var documentServer = make(map[string]int64)
+var id int
+var leader bool
+var dsLoad = make(map[string]int)
+var dsTimer = make(map[string] chan bool)
 
 func main() {
+	defer func() {
+        if r := recover(); r != nil {
+            fmt.Println(r)
+            os.Exit(1)
+        }
+    }()
+
+	// Read ID from flag
+	flag.IntVar(&id, "id", -1, "The process' ID")
+	flag.Parse()
+	
+	if id == -1 {
+		fmt.Println("A process ID must be provided with the '-id' flag.")
+		os.Exit(1)
+	}
+	
+	
+	c := make(chan bool)
+	go listen(c)
+	bully.Start(id, c)
+}
+
+func listen(c chan bool) {
+	
+	stopper := make(chan bool)
+
+	for {
+		
+		if <-c {
+		
+			fmt.Println("Got leader signal")
+			
+			time.Sleep(1 * time.Second)
+			go startListening(stopper)
+			
+		} else {
+		
+			fmt.Println("Got not leader signal")
+			
+			stopper <- false
+		}
+
+	}
+	
+}
+
+func startListening(stopper chan bool) {
 
 	// Listen for incoming connections.
-	l, err := net.Listen("tcp", CONN_HOST+":"+CONN_PORT)
+	addr, _ := net.ResolveTCPAddr("tcp", CONN_HOST+":"+CONN_PORT)
+	l, err := net.ListenTCP("tcp", addr)
 	if err != nil {
 		fmt.Println("Error listening:", err.Error())
-		os.Exit(1)
+		return
 	}
 	defer l.Close()
 
@@ -39,61 +95,83 @@ func main() {
 	// Actively listen for connections.
 	fmt.Println("Listening on " + CONN_HOST + ":" + CONN_PORT)
 	for {
-		// Listen for an incoming connection.
-		conn, err := l.Accept()
-
-		if err != nil {
-			fmt.Println("Error accepting: ", err.Error())
-			os.Exit(1)
+		select {
+		case <-stopper:
+			fmt.Println("Stopped listening")
+			return
+		default:
+			l.SetDeadline(time.Now().Add(LISTEN_TIMEOUT))
+			conn, err := l.Accept()
+			if err == nil {
+				// Handle connections in a new goroutine.
+				go handleRequest(conn)
+			}
 		}
-
-		// Handle connections in a new goroutine.
-		go handleRequest(conn)
 	}
+
 }
 
 // Handles incoming requests.
 func handleRequest(conn net.Conn) {
 	defer conn.Close()
+	
+	// Read from connection
+	buf := make([]byte, 512)
+	conn.SetReadDeadline(time.Now().Add(CONN_TIMEOUT))
+	n, err := conn.Read(buf)
+	if err != nil {
+		return
+	}
+	
+	// Unmarshal message
+	msg := lb.Message{}
+	err = json.Unmarshal(buf[:n], &msg)
+	
+	// Handle message
+	updateDS(msg.Address, msg.Load)
 
-	remoteAddr := conn.RemoteAddr().String()
+}
 
-	fmt.Println("Got connection:", remoteAddr)
+func updateDS(addr string, load int) {
+
+	dsLoad[addr] = load
+	
+	if _, exists := dsTimer[addr]; !exists {
+		dsTimer[addr] = make(chan bool)
+		go trackDS(addr)
+	}
+	
+	dsTimer[addr] <- true
+	
+	fmt.Printf("Headerbeat:\t%s\t%d\n", addr, load)
+
+}
+
+func trackDS(addr string) {
 
 	for {
-		// Make a buffer to hold incoming data.
-		buf := make([]byte, 4)
-
-		conn.SetReadDeadline(time.Now().Add(DS_TIMEOUT))
-		// Read the incoming data into the buffer.
-		_, err := conn.Read(buf)
-
-		if err != nil {
-			fmt.Println("Error reading:", err.Error())
-			delete(documentServer, remoteAddr)
-			printServers()
-			break
+		select {
+		case <-dsTimer[addr]:
+		case <-time.After(DS_TIMEOUT):
+			delete(dsLoad, addr)
+			delete(dsTimer, addr)
+			return
 		}
-
-		clients, _ := binary.Varint(buf)
-		documentServer[remoteAddr] = clients
-		fmt.Printf("Heartbeat:\t%s\t%d\n", remoteAddr, clients)
-
-		printServers()
 	}
+
 }
 
 func selectServer() {
 	var min string = ""
 
 	// Find server with least connections.
-	for ip, clients := range documentServer {
+	for ip, clients := range dsLoad {
 		if min == "" {
 			min = ip
 			continue
 		}
 
-		if documentServer[min] > clients {
+		if dsLoad[min] > clients {
 			min = ip
 		}
 	}
@@ -106,14 +184,14 @@ func selectServer() {
 }
 
 func changeDNS(ip string) {
-	//TODO skaffa domännamn. Uppdatera DNS
-	fmt.Printf("DNS: Active server is %s with %d clients.\n", ip, documentServer[ip])
+	//TODO get domain, update dns.
+	fmt.Printf("DNS: Active server is %s with %d clients.\n", ip, dsLoad[ip])
 }
 
 func printServers() {
 	fmt.Printf("LST: ------\n")
-	for key, value := range documentServer {
-		fmt.Printf("LST: %s\t%d\n", key, value)
+	for ip, clients := range dsLoad {
+		fmt.Printf("LST: %s\t%d\n", ip, clients)
 	}
 	fmt.Printf("LST: ------\n")
 }

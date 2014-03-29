@@ -3,7 +3,7 @@ package main
 import (
 	"code.google.com/p/go.net/websocket"
 	"codesync/ds"
-	"encoding/binary"
+	"codesync/lb"
 	"fmt"
 	"net"
 	"net/http"
@@ -19,7 +19,7 @@ const (
 	HEARTBEAT_TIMER = 8 * time.Second // Heartbeat interval.
 )
 
-var clients int64 = 0
+var clients int = 0
 var nextId int = 0
 
 // Echo the data received on the WebSocket.
@@ -43,35 +43,41 @@ func connectionHandler() {
 func main() {
 	fmt.Println("Starting document server...")
 
-	// Dial heartbeat monitor.
-	conn, err := net.Dial("tcp", HEARTBEAT_HOST+":"+HEARTBEAT_PORT)
-	if err != nil {
-		fmt.Println("Error dialing:", err.Error())
-		os.Exit(1)
-	}
-	defer conn.Close()
-
-	// Run a timed goroutine to send heartbeats.
-	heartbeatTicker := time.NewTicker(HEARTBEAT_TIMER)
-	go func() {
-		for _ = range heartbeatTicker.C {
-			buf := make([]byte, 4)
-			binary.PutVarint(buf, clients)
-			_, err := conn.Write(buf)
-			if err != nil {
-				fmt.Println("Heartbeat failed:", err.Error())
-			} else {
-				fmt.Println("Sent heartbeat")
-			}
-		}
-	}()
-	defer heartbeatTicker.Stop()
+	go heartbeat()
 
 	fmt.Println("Heartbeat running!")
 
 	connectionHandler()
 
 	fmt.Println("Stopped")
+}
+
+func heartbeat() {
+
+	for {
+		sendHeartbeat()
+		time.Sleep(HEARTBEAT_TIMER)
+	}
+
+}
+
+func sendHeartbeat() {
+
+	conn, err := net.Dial("tcp", HEARTBEAT_HOST+":"+HEARTBEAT_PORT)
+	if err != nil {
+		fmt.Println("Error dialing:", err.Error())
+		return
+	}
+	defer conn.Close()
+
+	msg := lb.Message{Address: CONN_HOST+":"+CONN_PORT, Load: clients}
+	_, err = conn.Write(msg.ToJSON())
+	if err != nil {
+		fmt.Println("Heartbeat failed:", err.Error())
+	} else {
+		fmt.Println("Sent heartbeat")
+	}
+	
 }
 
 func addClient() int {
