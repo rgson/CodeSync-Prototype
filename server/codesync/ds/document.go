@@ -1,8 +1,8 @@
 package ds
 
 import (
-	"ds/checksum"
-	"ds/queue"
+	"codesync/ds/checksum"
+	"codesync/ds/queue"
 	"fmt"
 	"github.com/sergi/go-diff/diffmatchpatch"
 	"io/ioutil"

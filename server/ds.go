@@ -2,7 +2,7 @@ package main
 
 import (
 	"code.google.com/p/go.net/websocket"
-	"ds"
+	"codesync/ds"
 	"encoding/binary"
 	"fmt"
 	"net"
