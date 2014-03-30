@@ -9,38 +9,29 @@ import (
 	"net/http"
 	"os"
 	"time"
+	"flag"
+	"strconv"
 )
 
 const (
-	CONN_HOST       = "localhost"     // Listening network.
-	CONN_PORT       = "4343"          // Listening port.
-	HEARTBEAT_HOST  = "localhost"     // Target host for heartbeat monitor.
-	HEARTBEAT_PORT  = "3434"          // Target port for heartbeat monitor.
+	CONN_HOST       = "localhost"     // Default listening network.
+	CONN_PORT       = 4343            // Default listening port.
+	HEARTBEAT_HOST  = "localhost"     // Default target host for heartbeat monitor.
+	HEARTBEAT_PORT  = 3434            // Default target port for heartbeat monitor.
 	HEARTBEAT_TIMER = 8 * time.Second // Heartbeat interval.
 )
+
+var port int
 
 var clients int = 0
 var nextId int = 0
 
-// Echo the data received on the WebSocket.
-func serveClient(ws *websocket.Conn) {
-	id := addClient()
-	client := ds.Client{ID: id, Connection: ws}
-	client.Handle()
-	dropClient()
-}
-
-func connectionHandler() {
-	http.Handle("/", websocket.Handler(serveClient))
-	err := http.ListenAndServe(CONN_HOST+":"+CONN_PORT, nil)
-	// if err not equal null then panic (stop execution)
-	if err != nil {
-		fmt.Println("Error listening:", err.Error())
-		os.Exit(1)
-	}
-}
-
 func main() {
+
+	// Read flags
+	flag.IntVar(&port, "p", CONN_PORT, "The server's listening port.")
+	flag.Parse()
+
 	fmt.Println("Starting document server...")
 
 	go heartbeat()
@@ -50,6 +41,7 @@ func main() {
 	connectionHandler()
 
 	fmt.Println("Stopped")
+	
 }
 
 func heartbeat() {
@@ -63,14 +55,14 @@ func heartbeat() {
 
 func sendHeartbeat() {
 
-	conn, err := net.Dial("tcp", HEARTBEAT_HOST+":"+HEARTBEAT_PORT)
+	conn, err := net.Dial("tcp", heartbeatAddr())
 	if err != nil {
 		fmt.Println("Error dialing:", err.Error())
 		return
 	}
 	defer conn.Close()
 
-	msg := lb.Message{Address: CONN_HOST+":"+CONN_PORT, Load: clients}
+	msg := lb.Message{Address: addr(), Load: clients}
 	_, err = conn.Write(msg.ToJSON())
 	if err != nil {
 		fmt.Println("Heartbeat failed:", err.Error())
@@ -78,6 +70,22 @@ func sendHeartbeat() {
 		fmt.Println("Sent heartbeat")
 	}
 	
+}
+
+func connectionHandler() {
+	http.Handle("/", websocket.Handler(serveClient))
+	err := http.ListenAndServe(addr(), nil)
+	if err != nil {
+		fmt.Println("Error listening:", err.Error())
+		os.Exit(1)
+	}
+}
+
+func serveClient(ws *websocket.Conn) {
+	id := addClient()
+	client := ds.Client{ID: id, Connection: ws}
+	client.Handle()
+	dropClient()
 }
 
 func addClient() int {
@@ -91,4 +99,16 @@ func addClient() int {
 func dropClient() {
 	clients--
 	fmt.Printf("Client disconnected. %d clients connected.\n", clients)
+}
+
+func addr() string {
+
+	return CONN_HOST + ":" + strconv.Itoa(port)
+
+}
+
+func heartbeatAddr() string {
+
+	return HEARTBEAT_HOST + ":" + strconv.Itoa(HEARTBEAT_PORT)
+	
 }
