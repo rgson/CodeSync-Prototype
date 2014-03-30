@@ -6,6 +6,7 @@ import (
 	"os"
 	"time"
 	"flag"
+	"strconv"
 	"encoding/json"
 	"codesync/lb"
 	"codesync/lb/bully"
@@ -13,7 +14,7 @@ import (
 
 const (
 	CONN_HOST  = "localhost"       // Listening network.
-	CONN_PORT  = "3434"            // Listening port.
+	CONN_PORT  = 3434              // Listening port.
 	DS_TIMEOUT = 10 * time.Second  // Timeout period for a document server's heartbeat signal.
 	LISTEN_TIMEOUT = 1 * time.Second // Timeout period for connection listening.
 	CONN_TIMEOUT = 10 * time.Second // Timout period for an established connection to send a message.
@@ -75,7 +76,7 @@ func listen(c chan bool) {
 func startListening(stopper chan bool) {
 
 	// Listen for incoming connections.
-	addr, _ := net.ResolveTCPAddr("tcp", CONN_HOST+":"+CONN_PORT)
+	addr, _ := net.ResolveTCPAddr("tcp", listenAddr())
 	l, err := net.ListenTCP("tcp", addr)
 	if err != nil {
 		fmt.Println("Error listening:", err.Error())
@@ -93,7 +94,7 @@ func startListening(stopper chan bool) {
 	defer dnsTicker.Stop()
 
 	// Actively listen for connections.
-	fmt.Println("Listening on " + CONN_HOST + ":" + CONN_PORT)
+	fmt.Println("Listening on " + listenAddr())
 	for {
 		select {
 		case <-stopper:
@@ -194,4 +195,10 @@ func printServers() {
 		fmt.Printf("LST: %s\t%d\n", ip, clients)
 	}
 	fmt.Printf("LST: ------\n")
+}
+
+func listenAddr() string {
+
+	return CONN_HOST + ":" + strconv.Itoa(CONN_PORT)
+
 }
