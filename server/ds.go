@@ -4,13 +4,13 @@ import (
 	"code.google.com/p/go.net/websocket"
 	"codesync/ds"
 	"codesync/lb"
+	"flag"
 	"fmt"
 	"net"
 	"net/http"
 	"os"
-	"time"
-	"flag"
 	"strconv"
+	"time"
 )
 
 const (
@@ -41,7 +41,7 @@ func main() {
 	connectionHandler()
 
 	fmt.Println("Stopped")
-	
+
 }
 
 func heartbeat() {
@@ -69,7 +69,7 @@ func sendHeartbeat() {
 	} else {
 		fmt.Println("Sent heartbeat")
 	}
-	
+
 }
 
 func connectionHandler() {
@@ -110,5 +110,5 @@ func addr() string {
 func heartbeatAddr() string {
 
 	return HEARTBEAT_HOST + ":" + strconv.Itoa(HEARTBEAT_PORT)
-	
+
 }

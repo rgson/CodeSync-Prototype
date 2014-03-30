@@ -1,76 +1,75 @@
 package main
 
 import (
+	"codesync/lb"
+	"codesync/lb/bully"
+	"encoding/json"
+	"flag"
 	"fmt"
 	"net"
 	"os"
-	"time"
-	"flag"
 	"strconv"
-	"encoding/json"
-	"codesync/lb"
-	"codesync/lb/bully"
+	"time"
 )
 
 const (
-	CONN_HOST  = "localhost"       // Listening network.
-	CONN_PORT  = 3434              // Listening port.
-	DS_TIMEOUT = 10 * time.Second  // Timeout period for a document server's heartbeat signal.
-	LISTEN_TIMEOUT = 1 * time.Second // Timeout period for connection listening.
-	CONN_TIMEOUT = 10 * time.Second // Timout period for an established connection to send a message.
-	DNS_TIMER  = 300 * time.Second // Interval för DNS updates.
+	CONN_HOST      = "localhost"       // Listening network.
+	CONN_PORT      = 3434              // Listening port.
+	DS_TIMEOUT     = 10 * time.Second  // Timeout period for a document server's heartbeat signal.
+	LISTEN_TIMEOUT = 1 * time.Second   // Timeout period for connection listening.
+	CONN_TIMEOUT   = 10 * time.Second  // Timout period for an established connection to send a message.
+	DNS_TIMER      = 300 * time.Second // Interval för DNS updates.
 )
 
 var id int
 var leader bool
 var dsLoad = make(map[string]int)
-var dsTimer = make(map[string] chan bool)
+var dsTimer = make(map[string]chan bool)
 
 func main() {
 	defer func() {
-        if r := recover(); r != nil {
-            fmt.Println(r)
-            os.Exit(1)
-        }
-    }()
+		if r := recover(); r != nil {
+			fmt.Println(r)
+			os.Exit(1)
+		}
+	}()
 
 	// Read ID from flag
 	flag.IntVar(&id, "id", -1, "The process' ID")
 	flag.Parse()
-	
+
 	if id == -1 {
 		fmt.Println("A process ID must be provided with the '-id' flag.")
 		os.Exit(1)
 	}
-	
-	
+
 	c := make(chan bool)
 	go listen(c)
 	bully.Start(id, c)
 }
 
 func listen(c chan bool) {
-	
+
 	stopper := make(chan bool)
 
 	for {
-		
+
 		if <-c {
-		
+
 			fmt.Println("Got leader signal")
-			
+
 			time.Sleep(1 * time.Second)
 			go startListening(stopper)
-			
+
 		} else {
-		
+
 			fmt.Println("Got not leader signal")
-			
+
 			stopper <- false
 		}
 
 	}
-	
+
 }
 
 func startListening(stopper chan bool) {
@@ -115,7 +114,7 @@ func startListening(stopper chan bool) {
 // Handles incoming requests.
 func handleRequest(conn net.Conn) {
 	defer conn.Close()
-	
+
 	// Read from connection
 	buf := make([]byte, 512)
 	conn.SetReadDeadline(time.Now().Add(CONN_TIMEOUT))
@@ -123,11 +122,11 @@ func handleRequest(conn net.Conn) {
 	if err != nil {
 		return
 	}
-	
+
 	// Unmarshal message
 	msg := lb.Message{}
 	err = json.Unmarshal(buf[:n], &msg)
-	
+
 	// Handle message
 	updateDS(msg.Address, msg.Load)
 
@@ -136,14 +135,14 @@ func handleRequest(conn net.Conn) {
 func updateDS(addr string, load int) {
 
 	dsLoad[addr] = load
-	
+
 	if _, exists := dsTimer[addr]; !exists {
 		dsTimer[addr] = make(chan bool)
 		go trackDS(addr)
 	}
-	
+
 	dsTimer[addr] <- true
-	
+
 	fmt.Printf("Headerbeat:\t%s\t%d\n", addr, load)
 
 }

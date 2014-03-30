@@ -1,21 +1,21 @@
 package bully
 
 import (
-	"os"
+	"encoding/json"
 	"fmt"
 	"net"
+	"os"
 	"time"
-	"encoding/json"
 )
 
 const (
-	CONFIG_FILE = "processes.json"
-	TIMEOUT = 5 * time.Second
+	CONFIG_FILE   = "processes.json"
+	TIMEOUT       = 5 * time.Second
 	PING_INTERVAL = 10 * time.Second
-	MSG_PING = "ping"
-	MSG_VOTE = "vote"
-	MSG_ALIVE = "alive"
-	MSG_LEADER = "leader"
+	MSG_PING      = "ping"
+	MSG_VOTE      = "vote"
+	MSG_ALIVE     = "alive"
+	MSG_LEADER    = "leader"
 )
 
 var id int
@@ -27,31 +27,31 @@ func Start(pid int, leaderChannel chan bool) {
 
 	id = pid
 	output = leaderChannel
-	
+
 	// Read processes from config
 	err := readConfig()
 	if err != nil {
 		panic(err.Error())
 	}
-	
+
 	if _, exists := processes[id]; !exists {
 		panic("Could not find the provided ID in the config file.")
 	}
-	
+
 	// Listen for other processes
 	listenAddr := processes[id]
 	delete(processes, id)
 	go listen(listenAddr)
-	
+
 	// Guess leader (highest ID)
 	guessLeader()
-	
+
 	// Ping leader at interval
 	for {
 		if leader != id {
 			alive := pingLeader()
 			if !alive {
-			fmt.Printf("%d: No response from leader!\n", id)
+				fmt.Printf("%d: No response from leader!\n", id)
 				announceVote()
 			}
 		}
@@ -60,22 +60,22 @@ func Start(pid int, leaderChannel chan bool) {
 
 }
 
-func readConfig() (error) {
+func readConfig() error {
 
 	file, err := os.Open(CONFIG_FILE)
 	if err != nil {
 		return fmt.Errorf("Failed to open configuration file: %s", CONFIG_FILE)
 	}
 	defer file.Close()
-	
+
 	decoder := json.NewDecoder(file)
 	procs := &Processes{}
 	decoder.Decode(&procs)
-	
+
 	for _, proc := range procs.Processes {
 		processes[proc.ID] = fmt.Sprintf("%s:%d", proc.Host, proc.Port)
 	}
-	
+
 	return nil
 
 }
@@ -87,7 +87,7 @@ func listen(addr string) {
 		panic(fmt.Sprintf("Error listening: %s", err.Error()))
 	}
 	defer l.Close()
-	
+
 	for {
 		// Listen for an incoming connection.
 		conn, err := l.Accept()
@@ -102,7 +102,7 @@ func listen(addr string) {
 
 func handleConn(conn net.Conn) {
 	defer conn.Close()
-	
+
 	// Read from connection
 	buf := make([]byte, 512)
 	conn.SetReadDeadline(time.Now().Add(TIMEOUT))
@@ -110,11 +110,11 @@ func handleConn(conn net.Conn) {
 	if err != nil {
 		return
 	}
-	
+
 	// Unmarshal message
 	msg := Message{}
 	err = json.Unmarshal(buf[:n], &msg)
-	
+
 	// Handle message
 	switch msg.Type {
 	case MSG_VOTE:
@@ -141,14 +141,14 @@ func setLeader(lead int) {
 	wasLeader := (leader == id)
 
 	leader = lead
-	
+
 	isLeader := (leader == id)
-	
+
 	if wasLeader != isLeader {
 		output <- isLeader
-		fmt.Printf("%d: New leader %d.\n", id, leader)	
+		fmt.Printf("%d: New leader %d.\n", id, leader)
 	}
-	
+
 }
 
 func guessLeader() {
@@ -160,17 +160,17 @@ func guessLeader() {
 		}
 	}
 	setLeader(lead)
-	
+
 	if leader == id {
 		announceVictory()
 	}
-	
+
 }
 
 func announceVictory() {
 
 	fmt.Printf("%d: I'm the new leader!\n", id)
-	
+
 	setLeader(id)
 	for pid, _ := range processes {
 		msg := Message{Type: MSG_LEADER, Sender: id}
@@ -184,20 +184,20 @@ func announceVote() {
 	fmt.Printf("%d: The leader is down!\n", id)
 
 	c := make(chan bool)
-	
+
 	for pid, _ := range processes {
 		if id < pid {
 			go ask(pid, c)
 		}
 	}
-	
+
 	select {
 	case <-c:
 		return
 	case <-time.After(TIMEOUT):
 		fmt.Printf("%d: No anwser from higher processes.\n", id)
 		announceVictory()
-	}			
+	}
 
 }
 
@@ -209,14 +209,14 @@ func pingLeader() bool {
 		return false
 	}
 	defer conn.Close()
-	
+
 	// Send ping
 	msg := Message{Type: MSG_PING, Sender: id}
 	_, err = conn.Write(msg.ToJSON())
 	if err != nil {
 		return false
 	}
-	
+
 	// Wait for answer
 	buf := make([]byte, 512)
 	conn.SetReadDeadline(time.Now().Add(TIMEOUT))
@@ -236,7 +236,7 @@ func dial(pid int) (conn net.Conn, err error) {
 		err = fmt.Errorf("Error dialing process %d", pid)
 		fmt.Printf("%d: %s\n", id, err.Error())
 	}
-	
+
 	return
 
 }
@@ -247,7 +247,7 @@ func send(pid int, msg Message) error {
 	if err == nil {
 		_, err = conn.Write(msg.ToJSON())
 	}
-	
+
 	return err
 
 }
@@ -287,14 +287,14 @@ type Processes struct {
 }
 
 type Process struct {
-	ID int `json:"id"`
+	ID   int    `json:"id"`
 	Host string `json:"host"`
-	Port int `json:"port"`
+	Port int    `json:"port"`
 }
 
 type Message struct {
-	Type string `json:"type"`
-	Sender int `json:"sender"`
+	Type   string `json:"type"`
+	Sender int    `json:"sender"`
 }
 
 func (m Message) ToJSON() []byte {

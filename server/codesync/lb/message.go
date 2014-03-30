@@ -1,13 +1,13 @@
 package lb
 
 import (
-	"fmt"
 	"encoding/json"
+	"fmt"
 )
 
 type Message struct {
 	Address string `json:"addr"`
-	Load int `json:"load"`
+	Load    int    `json:"load"`
 }
 
 func (m Message) ToJSON() []byte {
@@ -21,6 +21,6 @@ func MessageFromJSON(buf []byte) (Message, error) {
 	return msg, err
 }
 
-func NewMessage(host, port string, load int) (Message) {
+func NewMessage(host, port string, load int) Message {
 	return Message{Address: fmt.Sprintf("%s:%d", host, port), Load: load}
 }
