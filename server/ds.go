@@ -21,6 +21,7 @@ const (
 	HEARTBEAT_TIMER = 8 * time.Second // Heartbeat interval.
 )
 
+var host string
 var port int
 
 var clients int = 0
@@ -29,6 +30,7 @@ var nextId int = 0
 func main() {
 
 	// Read flags
+	flag.StringVar(&host, "h", CONN_HOST, "The server's listening network address.")
 	flag.IntVar(&port, "p", CONN_PORT, "The server's listening port.")
 	flag.Parse()
 
@@ -103,7 +105,7 @@ func dropClient() {
 
 func addr() string {
 
-	return CONN_HOST + ":" + strconv.Itoa(port)
+	return host + ":" + strconv.Itoa(port)
 
 }
 
